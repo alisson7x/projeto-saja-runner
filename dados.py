@@ -9,7 +9,8 @@ from oauth2client.service_account import ServiceAccountCredentials
 
 # Configuração de autenticação
 scope = ["https://spreadsheets.google.com/feeds", "https://www.googleapis.com/auth/drive"]
-creds = ServiceAccountCredentials.from_json_keyfile_name("caminho/para/seu_arquivo_credentials.json", scope)
+creds = ServiceAccountCredentials.from_json_keyfile_name("C:\\Users\\sombr\\OneDrive\\Documentos\\CredenciaisJSON\\saja-runner-4bc678623cbd.json", scope)
+
 client = gspread.authorize(creds)
 
 st.set_page_config("Participantes", page_icon="👟", layout="centered")
