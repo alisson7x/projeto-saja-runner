@@ -6,10 +6,24 @@ import matplotlib.pyplot as plt
 import plotly.express as px
 import gspread
 from oauth2client.service_account import ServiceAccountCredentials
+import os
+import json
 
+
+# Carregue o segredo do GitHub
+json_credenciais = os.getenv('CREDENCIAIS_RUNNER')
 # Configuração de autenticação
 scope = ["https://spreadsheets.google.com/feeds", "https://www.googleapis.com/auth/drive"]
-creds = ServiceAccountCredentials.from_json_keyfile_name("saja-runner_credenci.json", scope)
+
+# Carrega o segredo do GitHub
+if json_credenciais:
+    credenciais_dict = json.loads(json_credenciais)
+    creds = ServiceAccountCredentials.from_json_keyfile_dict(credenciais_dict, scope)
+    client = gspread.authorize(creds)
+else:
+    raise FileNotFoundError("Credenciais não encontradas nos segredos do GitHub.")
+
+
 
 client = gspread.authorize(creds)
 

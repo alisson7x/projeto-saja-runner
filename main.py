@@ -4,15 +4,23 @@ from streamlit_modal import Modal
 import phonenumbers
 import gspread
 from oauth2client.service_account import ServiceAccountCredentials
+import os
+import json  # Adicionei essa importação para carregar segredos como variáveis de ambiente
 
 st.set_page_config("Saja Runner", page_icon="👟", layout="centered")
 
 # Configuração de autenticação para Google Sheets
 scope = ["https://spreadsheets.google.com/feeds", "https://www.googleapis.com/auth/drive"]
+json_credenciais = os.getenv('CREDENCIAIS_RUNNER')  # Certifique-se de que a variável de ambiente está definida corretamente
+
 try:
-    creds = ServiceAccountCredentials.from_json_keyfile_name("saja-runner_credenci.json", scope)
-    client = gspread.authorize(creds)
-    sheet = client.open("SajaRunner").sheet1
+    if json_credenciais:
+        credenciais_dict = json.loads(json_credenciais)
+        creds = ServiceAccountCredentials.from_json_keyfile_dict(credenciais_dict, scope)
+        client = gspread.authorize(creds)
+        sheet = client.open("SajaRunner").sheet1
+    else:
+        raise FileNotFoundError("Credenciais não encontradas nos segredos do GitHub.")
 except Exception as e:
     st.error(f"Erro na configuração do Google Sheets: {e}")
     st.stop()
@@ -79,7 +87,7 @@ if st.button("Confirmar"):
             st.success("Parabéns, você se inscreveu no café e corrida de Saja!✅👟")
             st.balloons()
 
-            # Instancia o modal
+            # Instancia o modal de confirmação
             modal = Modal(
                 f"Parabéns, {nome}!🎉\n\nAgora basta você entrar no nosso grupo para acompanhar todas as notícias e novidades!👟",
                 key="popup"
