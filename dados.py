@@ -13,7 +13,7 @@ st.set_page_config("Participantes", page_icon="👟", layout="centered")
 
 # Autenticação com o Google Sheets
 def autenticar_google_sheets():
-    json_credenciais = os.getenv("credenciais_runner")
+    json_credenciais = os.getenv("CREDENCIAIS_RUNNER")
     if not json_credenciais:
         raise FileNotFoundError("Credenciais não encontradas nos segredos do GitHub.")
     

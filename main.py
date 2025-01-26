@@ -12,7 +12,7 @@ st.set_page_config("Saja Runner", page_icon="👟", layout="centered")
 # Função para inicializar Google Sheets
 def inicializar_google_sheets():
     scope = ["https://spreadsheets.google.com/feeds", "https://www.googleapis.com/auth/drive"]
-    json_credenciais = os.getenv("credenciais_runner")
+    json_credenciais = os.getenv("CREDENCIAIS_RUNNER")
 
     if not json_credenciais:
         raise FileNotFoundError("Credenciais não encontradas nos segredos do GitHub.")
