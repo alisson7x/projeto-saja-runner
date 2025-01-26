@@ -5,46 +5,42 @@ import phonenumbers
 import gspread
 from oauth2client.service_account import ServiceAccountCredentials
 import os
-import json  # Adicionei essa importação para carregar segredos como variáveis de ambiente
+import json
 
 st.set_page_config("Saja Runner", page_icon="👟", layout="centered")
 
-# Configuração de autenticação para Google Sheets
-scope = ["https://spreadsheets.google.com/feeds", "https://www.googleapis.com/auth/drive"]
-json_credenciais = os.getenv("credenciais_runner")  # Certifique-se de que a variável de ambiente está definida corretamente
+# Função para inicializar Google Sheets
+def inicializar_google_sheets():
+    scope = ["https://spreadsheets.google.com/feeds", "https://www.googleapis.com/auth/drive"]
+    json_credenciais = os.getenv("credenciais_runner")
 
-try:
-    if json_credenciais:
+    if not json_credenciais:
+        raise FileNotFoundError("Credenciais não encontradas nos segredos do GitHub.")
+
+    try:
         credenciais_dict = json.loads(json_credenciais)
         creds = ServiceAccountCredentials.from_json_keyfile_dict(credenciais_dict, scope)
         client = gspread.authorize(creds)
-        sheet = client.open("SajaRunner").sheet1
-    else:
-        raise FileNotFoundError("Credenciais não encontradas nos segredos do GitHub.")
+        return client.open("SajaRunner").sheet1
+    except Exception as e:
+        raise ConnectionError(f"Erro ao autenticar com o Google Sheets: {e}")
+
+# Inicializar a planilha
+try:
+    sheet = inicializar_google_sheets()
 except Exception as e:
-    st.error(f"Erro na configuração do Google Sheets: {e}")
+    st.error(e)
     st.stop()
 
-# Título
+# Título e imagem
 st.title("Bem-vindo ao Sistema de Cadastro para a corrida do Saja Runner!👟")
 st.divider()
-
-# Adicionando imagem
 st.image("img_zap.jpeg", width=700)
 st.divider()
 
-# Função para salvar os dados na Google Sheets
-def salvar_dados(sheet, nome, idade, telefone, cidade, sexo, part_ultima_corrida):
-    try:
-        sheet.append_row([nome, idade, telefone, cidade, sexo, part_ultima_corrida])
-        return True
-    except Exception as e:
-        st.error(f"Erro ao salvar os dados: {e}")
-        return False
-
-# Validação de entradas
+# Função para validar os dados
 def validar_dados(nome, idade, telefone, cidade, sexo, part_ultima_corrida):
-    if not nome or not idade or not telefone or not cidade or not sexo or not part_ultima_corrida:
+    if not all([nome, idade, telefone, cidade, sexo, part_ultima_corrida]):
         st.warning("Por favor, preencha todos os campos obrigatórios.")
         return False
 
@@ -63,7 +59,16 @@ def validar_dados(nome, idade, telefone, cidade, sexo, part_ultima_corrida):
 
     return True
 
-# Coletar os dados do usuário
+# Função para salvar os dados
+def salvar_dados(sheet, nome, idade, telefone, cidade, sexo, part_ultima_corrida):
+    try:
+        sheet.append_row([nome, idade, telefone, cidade, sexo, part_ultima_corrida])
+        return True
+    except Exception as e:
+        st.error(f"Erro ao salvar os dados: {e}")
+        return False
+
+# Coletar dados do usuário
 nome = st.text_input("Digite seu nome:", help="Escreva seu nome completo").title()
 idade = st.text_input("Digite sua idade:", max_chars=3)
 telefone = st.text_input("Digite seu telefone:", max_chars=13, help="Digite seu telefone com o DDD (somente números)")
@@ -72,7 +77,7 @@ sexo = st.radio("Selecione seu sexo:", ["Masculino", "Feminino"], horizontal=Tru
 part_ultima_corrida = st.radio("Você participou da última corrida e café?", ["Sim", "Não"], horizontal=True)
 
 # Formatar o telefone no padrão internacional
-telefone_formatado = ""
+telefone_formatado = telefone
 if telefone:
     try:
         parsed_phone = phonenumbers.parse(telefone, "BR")
@@ -80,19 +85,20 @@ if telefone:
     except phonenumbers.NumberParseException:
         telefone_formatado = telefone
 
-# Botão para finalizar cadastro
+# Botão para confirmar cadastro
 if st.button("Confirmar"):
     if validar_dados(nome, idade, telefone_formatado, cidade, sexo, part_ultima_corrida):
         if salvar_dados(sheet, nome, idade, telefone_formatado, cidade, sexo, part_ultima_corrida):
             st.success("Parabéns, você se inscreveu no café e corrida de Saja!✅👟")
             st.balloons()
 
-            # Instancia o modal de confirmação
-            modal = Modal(
-                f"Parabéns, {nome}!🎉\n\nAgora basta você entrar no nosso grupo para acompanhar todas as notícias e novidades!👟",
-                key="popup"
-            )
+            # Exibe modal com informações do grupo
+            modal = Modal(f"🎉 Parabéns, {nome}!", key="popup")
             with modal.container():
-                st.button("Entre no grupo do WhatsApp!", on_click=lambda: st.write("[Clique aqui para entrar](https://chat.whatsapp.com/KJWgrjXKjEu4YoDyD4VvZe)"))
+                st.subheader("Agora basta entrar no nosso grupo para acompanhar todas as novidades! 👟")
+                st.markdown(
+                    "[Clique aqui para entrar no grupo do WhatsApp](https://chat.whatsapp.com/KJWgrjXKjEu4YoDyD4VvZe)"
+                )
+                st.button("Fechar")
         else:
             st.error("Erro ao salvar os dados. Tente novamente.")
