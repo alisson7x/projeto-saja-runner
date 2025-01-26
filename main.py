@@ -11,7 +11,7 @@ st.set_page_config("Saja Runner", page_icon="👟", layout="centered")
 
 # Configuração de autenticação para Google Sheets
 scope = ["https://spreadsheets.google.com/feeds", "https://www.googleapis.com/auth/drive"]
-json_credenciais = os.getenv('CREDENCIAIS_RUNNER')  # Certifique-se de que a variável de ambiente está definida corretamente
+json_credenciais = os.getenv("credenciais_runner")  # Certifique-se de que a variável de ambiente está definida corretamente
 
 try:
     if json_credenciais:

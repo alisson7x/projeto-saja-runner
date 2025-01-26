@@ -11,7 +11,7 @@ import json
 
 
 # Carregue o segredo do GitHub
-json_credenciais = os.getenv('CREDENCIAIS_RUNNER')
+json_credenciais = os.getenv("credenciais_runner")
 # Configuração de autenticação
 scope = ["https://spreadsheets.google.com/feeds", "https://www.googleapis.com/auth/drive"]
 
