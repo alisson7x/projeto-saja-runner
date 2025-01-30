@@ -1,36 +1,12 @@
 import streamlit as st
-import pandas as pd
-from streamlit_modal import Modal
 import phonenumbers
-import gspread
-from oauth2client.service_account import ServiceAccountCredentials
-import os
+from google.cloud import firestore
+from google.oauth2 import service_account
 import json
+from streamlit_modal import Modal
 
+# Configuração da página
 st.set_page_config("Saja Runner", page_icon="👟", layout="centered")
-
-# Função para inicializar Google Sheets
-def inicializar_google_sheets():
-    scope = ["https://spreadsheets.google.com/feeds", "https://www.googleapis.com/auth/drive"]
-    json_credenciais = os.getenv("CREDENCIAIS_RUNNER")
-
-    if not json_credenciais:
-        raise FileNotFoundError("Credenciais não encontradas nos segredos do GitHub.")
-
-    try:
-        credenciais_dict = json.loads(json_credenciais)
-        creds = ServiceAccountCredentials.from_json_keyfile_dict(credenciais_dict, scope)
-        client = gspread.authorize(creds)
-        return client.open("SajaRunner").sheet1
-    except Exception as e:
-        raise ConnectionError(f"Erro ao autenticar com o Google Sheets: {e}")
-
-# Inicializar a planilha
-try:
-    sheet = inicializar_google_sheets()
-except Exception as e:
-    st.error(e)
-    st.stop()
 
 # Título e imagem
 st.title("Bem-vindo ao Sistema de Cadastro para a corrida do Saja Runner!👟")
@@ -59,13 +35,28 @@ def validar_dados(nome, idade, telefone, cidade, sexo, part_ultima_corrida):
 
     return True
 
-# Função para salvar os dados
-def salvar_dados(sheet, nome, idade, telefone, cidade, sexo, part_ultima_corrida):
+# Função para salvar os dados no Firestore
+def salvar_dados_firestore(nome, idade, telefone, cidade, sexo, part_ultima_corrida):
     try:
-        sheet.append_row([nome, idade, telefone, cidade, sexo, part_ultima_corrida])
+        # Conecta ao Firestore
+        key_dict = st.secrets["textkey"]
+        creds = service_account.Credentials.from_service_account_info(key_dict)
+        db = firestore.Client(credentials=creds)
+
+        # Cria um documento com os dados do usuário
+        doc_ref = db.collection("inscritos").document()
+        doc_ref.set({
+            "nome": nome,
+            "idade": int(idade),
+            "telefone": telefone,
+            "cidade": cidade,
+            "sexo": sexo,
+            "participou_ultima_corrida": part_ultima_corrida,
+            "timestamp": firestore.SERVER_TIMESTAMP  # Adiciona um timestamp automático
+        })
         return True
     except Exception as e:
-        st.error(f"Erro ao salvar os dados: {e}")
+        st.error(f"Erro ao salvar os dados no Firestore: {e}")
         return False
 
 # Coletar dados do usuário
@@ -85,20 +76,22 @@ if telefone:
     except phonenumbers.NumberParseException:
         telefone_formatado = telefone
 
-# Botão para confirmar cadastro
+# Instancia o modal
+modal = Modal("Parabens",key="popup")
+
 if st.button("Confirmar"):
     if validar_dados(nome, idade, telefone_formatado, cidade, sexo, part_ultima_corrida):
-        if salvar_dados(sheet, nome, idade, telefone_formatado, cidade, sexo, part_ultima_corrida):
+        if salvar_dados_firestore(nome, idade, telefone_formatado, cidade, sexo, part_ultima_corrida):
             st.success("Parabéns, você se inscreveu no café e corrida de Saja!✅👟")
             st.balloons()
-
-            # Exibe modal com informações do grupo
-            modal = Modal(f"🎉 Parabéns, {nome}!", key="popup")
+            
+            # Instancia o modal
+            modal = Modal(f"Parabéns por se inscrever {nome}🎉",key="popup")
             with modal.container():
-                st.subheader("Agora basta entrar no nosso grupo para acompanhar todas as novidades! 👟")
-                st.markdown(
-                    "[Clique aqui para entrar no grupo do WhatsApp](https://chat.whatsapp.com/KJWgrjXKjEu4YoDyD4VvZe)"
-                )
-                st.button("Fechar")
+                st.subheader(f"Agora basta entrar no link abaixo para entrar no grupo e acompanhar todas as novidades sobre a corrida!")
+                st.link_button("LINK DO GRUPO📲" , "https://chat.whatsapp.com/LnwO8dv3ENlBRsjNoHXx2S",
+                               use_container_width=True)
+                
+                st.button("Fechar", on_click=modal.close)
         else:
             st.error("Erro ao salvar os dados. Tente novamente.")
