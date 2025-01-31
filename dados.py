@@ -7,6 +7,7 @@ import phonenumbers
 import plotly.express as px
 from google.cloud import firestore
 from google.oauth2 import service_account
+import firebase_admin
 
 # Configuração da página do Streamlit
 st.set_page_config("Participantes", page_icon="👟", layout="centered")
@@ -14,26 +15,36 @@ st.set_page_config("Participantes", page_icon="👟", layout="centered")
 # Função para carregar dados do Firestore
 def carregar_dados_firestore():
     try:
-        # Conecta ao Firestore
-        key_dict = json.loads(st.secrets["textkey"])
-        creds = service_account.Credentials.from_service_account_info(key_dict)
-        db = firestore.Client(credentials=creds)
+        if 'db' not in st.session_state:
+            if 'textkey' not in st.secrets:
+                st.error("Credenciais do Firestore não encontradas. Verifique o arquivo secrets.toml.")
+                return pd.DataFrame()
+            
+            textkey = st.secrets["textkey"]
+            key_dict = json.loads(json.dumps(textkey))
+            creds = service_account.Credentials.from_service_account_info(key_dict)
+            st.session_state.db = firestore.Client(credentials=creds)
 
-        # Recupera todos os documentos da coleção "inscritos"
+        db = st.session_state.db
         inscritos_ref = db.collection("inscritos").stream()
+
+        # Converte documentos para dicionários e formata timestamp
         dados = []
-
         for doc in inscritos_ref:
-            dados.append(doc.to_dict())
-
-        # Converte os dados para um DataFrame do Pandas
-        df = pd.DataFrame(dados)
-        return df
+            doc_dict = doc.to_dict()
+            
+            # Converte timestamp para string
+            if "timestamp" in doc_dict and isinstance(doc_dict["timestamp"], firestore.SERVER_TIMESTAMP):
+                doc_dict["timestamp"] = doc_dict["timestamp"].strftime("%Y-%m-%d %H:%M:%S")
+            
+            dados.append(doc_dict)
+        
+        return pd.DataFrame(dados) if dados else pd.DataFrame()
     except Exception as e:
         st.error(f"Erro ao carregar dados do Firestore: {e}")
         return pd.DataFrame()
 
-# Exibe o modal de login
+# Modal de login
 def show_login_modal():
     modal = Modal("Login 🔐", key="popup")
     if modal.is_open():
@@ -41,109 +52,62 @@ def show_login_modal():
             st.title("Olá runner! 👟")
             password = st.text_input("Digite sua senha:", type="password")
             if st.button("Login"):
-                if password == "corrida":
+                if password == st.secrets.get("senha_corrida", "corrida"):
                     st.success("Login bem-sucedido!")
                     st.session_state.logged_in = True
                     modal.close()
                 else:
                     st.error("Senha incorreta. Tente novamente.")
-    modal.open()
+    else:
+        modal.open()
 
 # Formata números de telefone
 def format_phone_number(phone):
+    if pd.isna(phone) or phone == "":
+        return "Não informado"
     try:
         parsed_phone = phonenumbers.parse(str(phone), "BR")
         return phonenumbers.format_number(parsed_phone, phonenumbers.PhoneNumberFormat.INTERNATIONAL)
     except phonenumbers.NumberParseException:
-        return phone
+        return "Número inválido"
 
-# Gera gráficos com Plotly
+# Gera gráficos
 def gerar_grafico(dados, eixo_x, eixo_y, titulo, cor, labels, cores_personalizadas=None):
     fig = px.bar(
-        dados,
-        x=eixo_x,
-        y=eixo_y,
-        title=titulo,
-        color=cor,
-        labels=labels,
+        dados, x=eixo_x, y=eixo_y, title=titulo, color=cor, labels=labels,
         color_discrete_sequence=cores_personalizadas or px.colors.qualitative.Safe
     )
     fig.update_traces(texttemplate='%{y}', textposition='inside')
     return fig
 
-# Inicializa a variável de estado
+# Inicializa login
 if 'logged_in' not in st.session_state:
     st.session_state.logged_in = False
 
-# Mostra o modal de login, se necessário
 if not st.session_state.logged_in:
     show_login_modal()
 
-# Exibe os dados apenas se o usuário estiver logado
+# Exibe dados se logado
 if st.session_state.logged_in:
-    st.info("Apenas organizadores têm acesso a essa página!", icon="🪪")
-
-    # Carrega os dados do Firestore
-    dados = carregar_dados_firestore()
-
-    if not dados.empty:
-        # Exibe informações gerais
-        st.header(f"{len(dados)} pessoas estão cadastradas para a corrida.")
-        st.divider()
-
-        # Exibe tabela de participantes
-        st.header("Participantes", help="Apenas organizadores podem ver esses dados!")
-        st.dataframe(dados)
-        st.divider()
-
-        # Quantidade de pessoas por cidade
-        st.header("Quantidade de Pessoas por Cidade")
-        dados_agrupados_cidade = dados.groupby('cidade').size().reset_index(name='quantidade')
-        fig_cidade = gerar_grafico(
-            dados_agrupados_cidade,
-            eixo_x='cidade',
-            eixo_y='quantidade',
-            titulo='Quantidade de Pessoas por Cidade',
-            cor='cidade',
-            labels={'cidade': 'Cidades', 'quantidade': 'Quantidade de Pessoas'}
-        )
-        st.plotly_chart(fig_cidade)
-        st.divider()
-
-        # Quantidade de pessoas por sexo
-        st.header("Quantidade de Pessoas por Sexo")
-        dados_agrupados_sexo = dados.groupby("sexo").size().reset_index(name="quantidade")
-        fig_sexo = gerar_grafico(
-            dados_agrupados_sexo,
-            eixo_x='sexo',
-            eixo_y='quantidade',
-            titulo='Quantidade de Pessoas por Sexo',
-            cor='sexo',
-            labels={'sexo': 'Sexo', 'quantidade': 'Quantidade de Pessoas'},
-            cores_personalizadas=['#EF553B', '#636EFA']
-        )
-        st.plotly_chart(fig_sexo)
-        st.divider()
-
-        # Análise de participação na última corrida
-        st.header("Análise de Participantes desde a Última Corrida")
-        dados_agrupados_corrida = dados.groupby("part_ultima_corrida").size().reset_index(name="quantidade")
-        fig_corrida = gerar_grafico(
-            dados_agrupados_corrida,
-            eixo_x='part_ultima_corrida',
-            eixo_y='quantidade',
-            titulo='Participação na Última Corrida',
-            cor='part_ultima_corrida',
-            labels={'part_ultima_corrida': 'Última Corrida', 'quantidade': 'Quantidade de Pessoas'},
-            cores_personalizadas=['#E22A2A', '#02640C']
-        )
-        st.plotly_chart(fig_corrida)
-
-        # Contagem explícita de participantes
-        quantidade_nao = dados_agrupados_corrida.loc[dados_agrupados_corrida['part_ultima_corrida'] == 'Não', 'quantidade'].sum()
-        quantidade_sim = dados_agrupados_corrida.loc[dados_agrupados_corrida['part_ultima_corrida'] == 'Sim', 'quantidade'].sum()
-        st.subheader(f"{quantidade_nao} pessoas não participaram da última corrida❌")
-        st.subheader(f"{quantidade_sim} pessoas participaram da última corrida✅")
-        st.divider()
-    else:
-        st.warning("Nenhum dado encontrado no Firestore.")
+    st.info("Apenas organizadores têm acesso a essa página!", icon="🫧")
+    
+    if st.button("Carregar dados"):
+        dados = carregar_dados_firestore()
+        
+        if not dados.empty:
+            st.header(f"{len(dados)} pessoas cadastradas para a corrida.")
+            st.dataframe(dados)
+            
+            # Gráficos
+            for col, title, color in [("cidade", "Quantidade por Cidade", None),
+                                       ("sexo", "Quantidade por Sexo", ["#EF553B", "#636EFA"]),
+                                       ("part_ultima_corrida", "Participação na Última Corrida", ["#E22A2A", "#02640C"])]:
+                st.header(title)
+                dados_agrupados = dados.groupby(col).size().reset_index(name="quantidade")
+                fig = gerar_grafico(dados_agrupados, eixo_x=col, eixo_y="quantidade",
+                                    titulo=title, cor=col, labels={col: title, "quantidade": "Quantidade"},
+                                    cores_personalizadas=color)
+                st.plotly_chart(fig)
+            
+        else:
+            st.warning("Nenhum dado encontrado no Firestore.")
