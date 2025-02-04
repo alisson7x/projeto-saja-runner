@@ -7,7 +7,6 @@ import phonenumbers
 import plotly.express as px
 from google.cloud import firestore
 from google.oauth2 import service_account
-import firebase_admin
 
 # Configuração da página do Streamlit
 st.set_page_config("Participantes", page_icon="👟", layout="centered")
@@ -33,9 +32,22 @@ def carregar_dados_firestore():
         for doc in inscritos_ref:
             doc_dict = doc.to_dict()
             
-            # Converte timestamp para string
-            if "timestamp" in doc_dict and isinstance(doc_dict["timestamp"], firestore.SERVER_TIMESTAMP):
-                doc_dict["timestamp"] = doc_dict["timestamp"].strftime("%Y-%m-%d %H:%M:%S")
+            # Converte timestamp para string se for um objeto Timestamp
+            if "timestamp" in doc_dict:
+                timestamp = doc_dict["timestamp"]
+                if isinstance(timestamp, firestore.Timestamp):
+                    doc_dict["timestamp"] = timestamp.to_datetime().strftime("%Y-%m-%d %H:%M:%S")
+                else:
+                    doc_dict["timestamp"] = str(timestamp)  # Caso não seja um Timestamp, converte para string
+            
+            # Converte todos os valores para tipos serializáveis
+            for key, value in doc_dict.items():
+                if isinstance(value, (dict, list)):
+                    doc_dict[key] = json.dumps(value)  # Converte dicionários e listas em strings JSON
+                elif isinstance(value, firestore.Timestamp):
+                    doc_dict[key] = value.to_datetime().strftime("%Y-%m-%d %H:%M:%S")  # Converte Timestamp para string
+                elif isinstance(value, bytes):
+                    doc_dict[key] = value.decode('utf-8')  # Converte bytes para string
             
             dados.append(doc_dict)
         
@@ -43,7 +55,6 @@ def carregar_dados_firestore():
     except Exception as e:
         st.error(f"Erro ao carregar dados do Firestore: {e}")
         return pd.DataFrame()
-
 # Modal de login
 def show_login_modal():
     modal = Modal("Login 🔐", key="popup")
