@@ -9,7 +9,7 @@ from streamlit_modal import Modal
 st.set_page_config("Saja Runner", page_icon="👟", layout="centered")
 
 # Logo para acessar a pagina de análise de dados (somente adm)
-st.logo("img.png", size="large", link="https://projeto-saja-runner-dados.streamlit.app/")
+st.logo("img.png",link="https://projeto-saja-runner-dados.streamlit.app/", size="large")
 
 # Título e imagem
 st.title("Faça sua inscrição para a corrida do Saja Runner!👟")
