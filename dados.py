@@ -1,5 +1,4 @@
-import os
-import json
+
 import pandas as pd
 import streamlit as st
 from streamlit_modal import Modal
@@ -7,6 +6,8 @@ import phonenumbers
 import plotly.express as px
 from google.cloud import firestore
 from google.oauth2 import service_account
+import firebase_admin
+from firebase_admin import credentials, firestore
 
 # Configuração da página do Streamlit
 st.set_page_config("Participantes", page_icon="👟", layout="centered")
@@ -14,53 +15,29 @@ st.set_page_config("Participantes", page_icon="👟", layout="centered")
 # Função para carregar dados do Firestore
 def carregar_dados_firestore():
     try:
-        if 'db' not in st.session_state:
-            if 'textkey' not in st.secrets:
-                st.error("Credenciais do Firestore não encontradas. Verifique o arquivo secrets.toml.")
-                return pd.DataFrame()
-            
-            textkey = st.secrets["textkey"]
-            key_dict = json.loads(json.dumps(textkey))
-            creds = service_account.Credentials.from_service_account_info(key_dict)
-            st.session_state.db = firestore.Client(credentials=creds)
+        key_dict = st.secrets["textkey"]
+        creds = service_account.Credentials.from_service_account_info(key_dict)
+        db = firestore.Client(credentials=creds)
 
-        db = st.session_state.db
         inscritos_ref = db.collection("inscritos").stream()
-
-        # Converte documentos para dicionários e formata timestamp
-        dados = []
-        for doc in inscritos_ref:
-            doc_dict = doc.to_dict()
-            
-            # Converte timestamp para string se for um objeto Timestamp
-            if "timestamp" in doc_dict:
-                timestamp = doc_dict["timestamp"]
-                if isinstance(timestamp, firestore.Timestamp):
-                    doc_dict["timestamp"] = timestamp.to_datetime().strftime("%Y-%m-%d %H:%M:%S")
-                else:
-                    doc_dict["timestamp"] = str(timestamp)  # Caso não seja um Timestamp, converte para string
-            
-            # Converte todos os valores para tipos serializáveis
-            for key, value in doc_dict.items():
-                if isinstance(value, (dict, list)):
-                    doc_dict[key] = json.dumps(value)  # Converte dicionários e listas em strings JSON
-                elif isinstance(value, firestore.Timestamp):
-                    doc_dict[key] = value.to_datetime().strftime("%Y-%m-%d %H:%M:%S")  # Converte Timestamp para string
-                elif isinstance(value, bytes):
-                    doc_dict[key] = value.decode('utf-8')  # Converte bytes para string
-            
-            dados.append(doc_dict)
-        
+        dados = [doc.to_dict() for doc in inscritos_ref]
         return pd.DataFrame(dados) if dados else pd.DataFrame()
     except Exception as e:
         st.error(f"Erro ao carregar dados do Firestore: {e}")
         return pd.DataFrame()
+
+# Exemplo de uso
+if __name__ == "__main__":
+    df = carregar_dados_firestore()
+    
+
+
 # Modal de login
 def show_login_modal():
     modal = Modal("Login 🔐", key="popup")
     if modal.is_open():
         with modal.container():
-            st.title("Olá runner! 👟")
+            st.title("Painel Administrativo🔑")
             password = st.text_input("Digite sua senha:", type="password")
             if st.button("Login"):
                 if password == st.secrets.get("senha_corrida", "corrida"):
@@ -112,7 +89,7 @@ if st.session_state.logged_in:
             # Gráficos
             for col, title, color in [("cidade", "Quantidade por Cidade", None),
                                        ("sexo", "Quantidade por Sexo", ["#EF553B", "#636EFA"]),
-                                       ("part_ultima_corrida", "Participação na Última Corrida", ["#E22A2A", "#02640C"])]:
+                                       ("participou_ultima_corrida", "Participação na Última Corrida", ["#E22A2A", "#02640C"])]:
                 st.header(title)
                 dados_agrupados = dados.groupby(col).size().reset_index(name="quantidade")
                 fig = gerar_grafico(dados_agrupados, eixo_x=col, eixo_y="quantidade",
